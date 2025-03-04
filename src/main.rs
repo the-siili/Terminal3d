@@ -101,7 +101,7 @@ mod render {
                 w:width,
                 h:height,
                 default_c: c,
-                cam:Vector3::new(0.0, 0.0, -40.0),
+                cam:Vector3::new(0.0, 0.0, -100.0),
                 cam_rotation:Vector3::new(0.0, 0.0, 0.0),
                 fov:90.0
             }
@@ -143,16 +143,17 @@ mod render {
 
             }
         }
+        
         pub fn render_shape(&mut self, shape: &Shape){
-            let new_position = s
+            let position: Vector3 = self.rotated_point_by_cam_y(shape.position.clone());
             for (a, b) in &shape.links {
-                let x1 = shape.position.x + shape.vertecies[*a].0;
-                let y1 = shape.position.y + shape.vertecies[*a].1;
-                let mut z1 = shape.position.z + shape.vertecies[*a].2;
+                let x1 = position.x + shape.vertecies[*a].0;
+                let y1 = position.y + shape.vertecies[*a].1;
+                let mut z1 = position.z + shape.vertecies[*a].2;
 
-                let x2 = shape.position.x + shape.vertecies[*b].0;
-                let y2 = shape.position.y + shape.vertecies[*b].1;
-                let mut z2 = shape.position.z + shape.vertecies[*b].2;
+                let x2 = position.x + shape.vertecies[*b].0;
+                let y2 = position.y + shape.vertecies[*b].1;
+                let mut z2 = position.z + shape.vertecies[*b].2;
 
                 if z1-self.cam.z <= 0.0 {
                     z1 = self.cam.z + 0.01;
@@ -176,8 +177,9 @@ mod render {
 
 
         fn rotated_point_by_cam_y(&mut self, point: Vector3) -> Vector3{
-            let new_x = self.cam.y + ((point.x+self.cam.y) * self.cam_rotation.y.cos() + (point.z-self.cam.z)*self.cam_rotation.y.sin());
-            let new_z = self.cam.z + (point.x+self.cam.y) * -self.cam_rotation.y.sin() + (self.cam.z + point.z)*self.cam_rotation.y.cos();
+            let new_x = self.cam.y + ((point.x-self.cam.y) * self.cam_rotation.y.cos() + (point.z-self.cam.z)*self.cam_rotation.y.sin());
+            let new_z = self.cam.z + (point.x-self.cam.y) * -self.cam_rotation.y.sin() + (point.z - self.cam.z)*self.cam_rotation.y.cos();
+
             Vector3::new(
                 new_x,
                 point.y,
@@ -301,7 +303,7 @@ fn main() {
 
         let mut input = String::new();
         stdin().read_line(&mut input).expect("Error While Input");
-    
+        
         if input.contains('x') {
             cube.rotate_x(0.1);
         }
@@ -310,6 +312,9 @@ fn main() {
         }
         else if input.contains('z') {
             cube.rotate_z(0.1);
+        }
+        else if input.contains('h') {
+            viewport.cam_rotation.y += 0.1;
         }
         movement(&mut viewport);
         viewport.clear();
