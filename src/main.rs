@@ -78,12 +78,20 @@ mod math {
 }
 
 mod render {
+    use std::io::empty;
+
     use crate::math::Vector2;
     use crate::math::Vector3;
     use crate::objects::Shape;
     extern crate bresenham;
     use bresenham::Bresenham;
 
+
+    pub struct Pixel {
+        point: Vector2,
+        depth_index: f64,
+    }
+    
     pub struct Viewport {
         pub surface: Vec<Vec<char>>,
         pub w:usize,
@@ -120,6 +128,13 @@ mod render {
                 self.draw_point(&Vector2::new(x as f64, y as f64), '■');
             }
         }
+        pub fn generate_line(&mut self, a: &Vector2, b: &Vector2) -> Vec<Vector2> {
+            let mut points : Vec<Vector2> = Vec::<Vector2>::new();
+            for (x, y) in Bresenham::new((a.x.round() as isize, a.y.round() as isize,), (b.x.round()as isize, b.y.round() as isize,)) {
+                points.push(Vector2::new(x as f64, y as f64));
+            }
+            points
+        }
 
         pub fn draw_shape(&mut self, vertecies: &Vec<(f64, f64, f64)>, links: Vec<(usize, usize)>){
             for (a, b) in links {
@@ -137,6 +152,8 @@ mod render {
                 if z2-self.cam.z <= 0.0{
                     z2 = self.cam.z + 0.01;
                 }
+                
+
 
                 self.draw_line(&self.pos_to_screen(&Vector3::new(x1, y1, z1)),
                             &self.pos_to_screen( &Vector3::new(x2, y2, z2)));
@@ -144,27 +161,32 @@ mod render {
             }
         }
         
+
         pub fn render_shape(&mut self, shape: &Shape){
             let position: Vector3 = self.rotated_point_by_cam_y(shape.position.clone());
-            for (a, b) in &shape.links {
-                let x1 = position.x + shape.vertecies[*a].0;
-                let y1 = position.y + shape.vertecies[*a].1;
-                let mut z1 = position.z + shape.vertecies[*a].2;
-
-                let x2 = position.x + shape.vertecies[*b].0;
-                let y2 = position.y + shape.vertecies[*b].1;
-                let mut z2 = position.z + shape.vertecies[*b].2;
-
-                if z1-self.cam.z <= 0.0 {
-                    z1 = self.cam.z + 0.01;
+            let mut pixels:Vec<Pixel> = Vec::new();
+            for face in &shape.faces {
+                let mut vertecies: Vec<(f64, f64, f64)> = Vec::new();
+                for i in face {
+                    let mut new_z = position.z + shape.vertecies[*i].2;
+                    if new_z - self.cam.z <= 0.0 {
+                        new_z = self.cam.z + 0.01;
+                    }
+                    vertecies.push((
+                        position.x + shape.vertecies[*i].0,
+                        position.y + shape.vertecies[*i].1,
+                        new_z));
+                    
                 }
-                if z2-self.cam.z <= 0.0{
-                    z2 = self.cam.z + 0.01;
+
+
+                let mut corner_pixels: Vec<Pixel> = Vec::new();
+                for i in vertecies {
+                    corner_pixels.push(Pixel{
+                        point:self.pos_to_screen(&Vector3::new(i.0, i.1, i.2)),
+                        depth_index: i.2
+                    });
                 }
-
-                self.draw_line(&self.pos_to_screen(&Vector3::new(x1, y1, z1)),
-                            &self.pos_to_screen( &Vector3::new(x2, y2, z2)));
-
             }
         }
         fn pos_to_screen(&self, p:&Vector3) -> Vector2 {
@@ -192,7 +214,7 @@ mod render {
         }
 
         pub fn render(&self){
-            print!("{esc}c", esc = 27 as char);
+            print!("{}[2J", 27 as char);
             for y in &self.surface{
                 for x in y{
                     print!(" {x}");
@@ -208,17 +230,17 @@ mod objects {
     pub struct Shape {
         init_vertecies: Vec<(f64, f64, f64)>,
         pub vertecies: Vec<(f64, f64, f64)>,
-        pub links: Vec<(usize, usize)>,
+        pub faces: Vec<Vec<usize>>,
         pub position: Vector3,
         pub rotation: Vector3
     }
 
     impl Shape {
-        pub fn new(in_vertecies: Vec<(f64, f64, f64)>, in_links: Vec<(usize, usize)>, in_position: Vector3, in_rotation: Vector3) -> Self {
+        pub fn new(in_vertecies: Vec<(f64, f64, f64)>, in_faces: Vec<Vec<usize>>, in_position: Vector3, in_rotation: Vector3) -> Self {
             Self { 
                 init_vertecies: in_vertecies.clone(),
                 vertecies: in_vertecies.clone(),
-                links: in_links,
+                faces: in_faces,
                 position:in_position,
                 rotation:in_rotation
             }
@@ -263,18 +285,17 @@ mod objects {
 
 }
 
-use std::fmt::Error;
-use std::ptr::null;
 
 use render::Viewport;
-use math::Vector2;
 use math::Vector3;
 use objects::Shape;
 
-use std::io::stdin;
-use std::{thread, time::Duration};
+use getch_rs::{Getch, Key};
+
 fn main() {
-    let mut viewport: Viewport = Viewport::new(64, 64, ' ');
+
+    println!("\x1B[?1049h");
+    let mut viewport: Viewport = Viewport::new(50, 50, ' ');
 
     let vertecies: Vec<(f64, f64, f64)> = vec![
         (-10.0, 10.0, -10.0),
@@ -287,73 +308,55 @@ fn main() {
         (10.0, -10.0, 10.0)
     ];
 
-    let links: Vec<(usize, usize)> = vec![(0, 1), (0, 2), (0, 4),
-                                            (1, 3), (1, 5),
-                                            (2, 3), (2, 6),
-                                            (3, 7),
-                                            (4, 5), (4, 6),
-                                            (5, 7),
-                                            (6, 7)];
+    let faces: Vec<Vec<usize>> = vec![vec![0, 1, 2, 3],
+                                        vec![0, 2, 4, 6],
+                                        vec![0, 1, 4, 5],
+                                        vec![4, 5, 6, 7],
+                                        vec![1, 5, 3, 8],
+                                        vec![2, 6, 8, 3]];
 
     let mut cube : Shape = Shape::new(vertecies.clone(), 
-                                        links.clone(), 
+                                        faces.clone(), 
                                         Vector3::new(0.0, 0.0, 20.0),
                                         Vector3::new(0.0, 0.0, 0.0));
+    viewport.render_shape(&cube);
+    viewport.render();
     loop {
 
-        let mut input = String::new();
-        stdin().read_line(&mut input).expect("Error While Input");
-        
-        if input.contains('x') {
-            cube.rotate_x(0.1);
-        }
-        else if input.contains('y') {
-            cube.rotate_y(0.1);
-        }
-        else if input.contains('z') {
-            cube.rotate_z(0.1);
-        }
-        else if input.contains('h') {
-            viewport.cam_rotation.y += 0.1;
-        }
-        movement(&mut viewport);
+
+
+        movement(&mut viewport, &mut cube);
         viewport.clear();
 
         //viewport.draw_shape(&vertecies, links);
         viewport.render_shape(&cube);
         viewport.render();
-        //thread::sleep(Duration::from_millis(500));
+        //thread::sleep(Duration::from_millis(50));
     }
 }
 
 
-fn movement(viewport: &mut Viewport) {
-    let mut input = String::new();
-    stdin().read_line(&mut input).expect("Error While Input");
-
-    if input.contains('a') {
-        viewport.cam.x -= 1.0 * input.chars().filter(|c| *c == 'a').count() as f64;
-    }
-    else if input.contains('d') {
-        viewport.cam.x += 1.0 * input.chars().filter(|c| *c == 'd').count() as f64;
-    }
-    else if input.contains('w') {
-        viewport.cam.z += 1.0 * input.chars().filter(|c| *c == 'w').count() as f64;
-    }
-    else if input.contains('s') {
-        viewport.cam.z -= 1.0 * input.chars().filter(|c| *c == 's').count() as f64;
-    }
-    else if input.contains('v') {
-        viewport.cam.y += 1.0 * input.chars().filter(|c| *c == 'v').count() as f64;
-    }
-    else if input.contains(' ') {
-        viewport.cam.y -= 1.0 * input.chars().filter(|c| *c == ' ').count() as f64;
-    }
-    else if input.contains('l') {
-        viewport.fov -= 1.0 * input.chars().filter(|c| *c == 'l').count() as f64;
-    }
-    else if input.contains('k') {
-        viewport.fov += 1.0 * input.chars().filter(|c| *c == 'k').count() as f64;
+fn movement(viewport: &mut Viewport, cube: &mut Shape) {
+    //let mut input = String::new();
+    //stdin().read_line(&mut input).expect("Error While Input");
+    let g = Getch::new();
+    match g.getch() {
+        Ok(Key::Char('a')) => {viewport.cam.x -= 1.0},
+        Ok(Key::Char('d')) => {viewport.cam.x += 1.0},
+        Ok(Key::Char('w')) => {viewport.cam.z += 1.0},
+        Ok(Key::Char('s')) => {viewport.cam.z -= 1.0},
+        Ok(Key::Char(' ')) => {viewport.cam.y -= 1.0},
+        Ok(Key::Char('c')) => {viewport.cam.y += 1.0},
+        Ok(Key::Char('l')) => {viewport.fov -= 1.0},
+        Ok(Key::Char('k')) => {viewport.fov -= 1.0},
+        Ok(Key::Char('x')) => {cube.rotate_x(0.1);},
+        Ok(Key::Char('y')) => {cube.rotate_y(0.1);},
+        Ok(Key::Char('z')) => {cube.rotate_z(0.1);},
+        Ok(Key::Char('X')) => {cube.rotate_x(-0.1);},
+        Ok(Key::Char('Y')) => {cube.rotate_y(-0.1);},
+        Ok(Key::Char('Z')) => {cube.rotate_z(-0.1);},
+        Ok(Key::Char('q')) => {println!("\x1B[?1049l"); panic!("quit");},
+        _ => {},
     }
 }
 
