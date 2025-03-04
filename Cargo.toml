@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 bresenham = "0.1.1"
+inputbot = "0.6.0"
