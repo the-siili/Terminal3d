@@ -192,7 +192,7 @@ mod render {
         }
 
         pub fn render(&self){
-            print!("{esc}c", esc = 27 as char);
+            print!("{}[2J", 27 as char);
             for y in &self.surface{
                 for x in y{
                     print!(" {x}");
@@ -273,8 +273,13 @@ use objects::Shape;
 
 use std::io::stdin;
 use std::{thread, time::Duration};
+
+use getch_rs::{Getch, Key};
+
 fn main() {
-    let mut viewport: Viewport = Viewport::new(64, 64, ' ');
+
+    println!("\x1B[?1049h");
+    let mut viewport: Viewport = Viewport::new(50, 50, ' ');
 
     let vertecies: Vec<(f64, f64, f64)> = vec![
         (-10.0, 10.0, -10.0),
@@ -299,61 +304,44 @@ fn main() {
                                         links.clone(), 
                                         Vector3::new(0.0, 0.0, 20.0),
                                         Vector3::new(0.0, 0.0, 0.0));
+    viewport.render_shape(&cube);
+    viewport.render();
     loop {
 
-        let mut input = String::new();
-        stdin().read_line(&mut input).expect("Error While Input");
-        
-        if input.contains('x') {
-            cube.rotate_x(0.1);
-        }
-        else if input.contains('y') {
-            cube.rotate_y(0.1);
-        }
-        else if input.contains('z') {
-            cube.rotate_z(0.1);
-        }
-        else if input.contains('h') {
-            viewport.cam_rotation.y += 0.1;
-        }
-        movement(&mut viewport);
+
+
+        movement(&mut viewport, &mut cube);
         viewport.clear();
 
         //viewport.draw_shape(&vertecies, links);
         viewport.render_shape(&cube);
         viewport.render();
-        //thread::sleep(Duration::from_millis(500));
+        //thread::sleep(Duration::from_millis(50));
     }
 }
 
 
-fn movement(viewport: &mut Viewport) {
-    let mut input = String::new();
-    stdin().read_line(&mut input).expect("Error While Input");
-
-    if input.contains('a') {
-        viewport.cam.x -= 1.0 * input.chars().filter(|c| *c == 'a').count() as f64;
-    }
-    else if input.contains('d') {
-        viewport.cam.x += 1.0 * input.chars().filter(|c| *c == 'd').count() as f64;
-    }
-    else if input.contains('w') {
-        viewport.cam.z += 1.0 * input.chars().filter(|c| *c == 'w').count() as f64;
-    }
-    else if input.contains('s') {
-        viewport.cam.z -= 1.0 * input.chars().filter(|c| *c == 's').count() as f64;
-    }
-    else if input.contains('v') {
-        viewport.cam.y += 1.0 * input.chars().filter(|c| *c == 'v').count() as f64;
-    }
-    else if input.contains(' ') {
-        viewport.cam.y -= 1.0 * input.chars().filter(|c| *c == ' ').count() as f64;
-    }
-    else if input.contains('l') {
-        viewport.fov -= 1.0 * input.chars().filter(|c| *c == 'l').count() as f64;
-    }
-    else if input.contains('k') {
-        viewport.fov += 1.0 * input.chars().filter(|c| *c == 'k').count() as f64;
+fn movement(viewport: &mut Viewport, cube: &mut Shape) {
+    //let mut input = String::new();
+    //stdin().read_line(&mut input).expect("Error While Input");
+    let g = Getch::new();
+    match g.getch() {
+        Ok(Key::Char('a')) => {viewport.cam.x -= 1.0},
+        Ok(Key::Char('d')) => {viewport.cam.x += 1.0},
+        Ok(Key::Char('w')) => {viewport.cam.z += 1.0},
+        Ok(Key::Char('s')) => {viewport.cam.z -= 1.0},
+        Ok(Key::Char(' ')) => {viewport.cam.y -= 1.0},
+        Ok(Key::Char('c')) => {viewport.cam.y += 1.0},
+        Ok(Key::Char('l')) => {viewport.fov -= 1.0},
+        Ok(Key::Char('k')) => {viewport.fov -= 1.0},
+        Ok(Key::Char('x')) => {cube.rotate_x(0.1);},
+        Ok(Key::Char('y')) => {cube.rotate_y(0.1);},
+        Ok(Key::Char('z')) => {cube.rotate_z(0.1);},
+        Ok(Key::Char('X')) => {cube.rotate_x(-0.1);},
+        Ok(Key::Char('Y')) => {cube.rotate_y(-0.1);},
+        Ok(Key::Char('Z')) => {cube.rotate_z(-0.1);},
+        Ok(Key::Char('q')) => {println!("\x1B[?1049l"); panic!("quit");},
+        _ => {},
     }
 }
 
